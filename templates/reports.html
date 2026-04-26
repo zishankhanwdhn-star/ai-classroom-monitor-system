@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Monitor v3 — Reports</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/base.css">
+<style>
+.filter-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r1);margin-bottom:18px;backdrop-filter:blur(16px)}
+.filter-bar .form-input{width:auto;padding:8px 12px;font-size:.82rem}
+.filter-bar label{font-size:.68rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.sum-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:16px;text-align:center;position:relative;overflow:hidden}
+.sum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--sc,var(--accent))}
+.sum-num{font-family:var(--fh);font-size:1.7rem;color:var(--sc,var(--accent));margin-bottom:3px}
+.sum-lbl{font-size:.62rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+.table-wrap{overflow-x:auto;max-height:420px;overflow-y:auto}
+.page-rows{display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--muted);margin-bottom:10px}
+.action-bar{display:flex;gap:10px;flex-wrap:wrap;padding:14px 18px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r1);margin-bottom:18px;backdrop-filter:blur(16px)}
+@media(max-width:800px){.summary-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="bg-orb ob1"></div><div class="bg-orb ob2"></div><div class="bg-orb ob3"></div>
+<nav>
+  <a href="/dashboard" class="nav-brand"><div class="nav-logo">🎓</div><div><div class="nav-name">AI CLASSROOM MONITOR</div><div class="nav-sub">v3 PROFESSIONAL</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link"><span class="nl-icon">📡</span><span class="nl-text">Dashboard</span></a>
+    <a href="/analytics" class="nav-link"><span class="nl-icon">📊</span><span class="nl-text">Analytics</span></a>
+    <a href="/reports"   class="nav-link active"><span class="nl-icon">📋</span><span class="nl-text">Reports</span></a>
+    <a href="/logs"      class="nav-link"><span class="nl-icon">📝</span><span class="nl-text">Logs</span></a>
+    <a href="/settings"  class="nav-link"><span class="nl-icon">⚙️</span><span class="nl-text">Settings</span></a>
+    <a href="/admin"     class="nav-link"><span class="nl-icon">🛡️</span><span class="nl-text">Admin</span></a>
+  </div>
+  <div class="nav-right"><span id="clock">--:--:--</span><a href="/logout" class="nbtn logout">⏻</a></div>
+</nav>
+<div class="page">
+  <div class="page-header">
+    <div><div class="page-title">📋 REPORTS</div><div class="page-sub">FILTERED DATA EXPORT & ANALYSIS</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <label>Date</label>
+    <input type="date" id="f-date" class="form-input" style="color-scheme:dark">
+    <label>Camera</label>
+    <select id="f-cam" class="form-input form-select" style="width:130px">
+      <option value="">All Cameras</option>
+      <option value="0">Camera 1</option>
+      <option value="1">Camera 2</option>
+      <option value="2">Camera 3</option>
+      <option value="3">Camera 4</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="loadReport()">🔍 APPLY FILTER</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕ CLEAR</button>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="summary-grid">
+    <div class="sum-card" style="--sc:var(--accent)"><div class="sum-num" id="s-logs">—</div><div class="sum-lbl">Total Logs</div></div>
+    <div class="sum-card" style="--sc:var(--green)"><div class="sum-num" id="s-peak">—</div><div class="sum-lbl">Peak Count</div></div>
+    <div class="sum-card" style="--sc:var(--yellow)"><div class="sum-num" id="s-avg">—</div><div class="sum-lbl">Avg Count</div></div>
+    <div class="sum-card" style="--sc:var(--orange)"><div class="sum-num" id="s-caps">—</div><div class="sum-lbl">Captures</div></div>
+    <div class="sum-card" style="--sc:var(--purple)"><div class="sum-num" id="s-alerts">—</div><div class="sum-lbl">Alerts</div></div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="action-bar">
+    <button class="btn btn-primary" onclick="dlJson()">⬇ DOWNLOAD JSON</button>
+    <button class="btn btn-success" onclick="dlCsv()">⬇ DOWNLOAD CSV</button>
+    <button class="btn btn-warn" onclick="sendEmail()">📧 SEND EMAIL REPORT</button>
+    <span style="margin-left:auto;font-size:.72rem;color:var(--muted)" id="dl-status"></span>
+  </div>
+
+  <!-- Data table -->
+  <div class="panel">
+    <div class="ph">
+      <span class="pt">Report Data</span>
+      <span class="ps" id="row-count">0 records</span>
+    </div>
+    <div class="pb" style="padding:10px 0">
+      <div class="table-wrap">
+        <table class="data-table" style="padding:0 18px">
+          <thead>
+            <tr>
+              <th style="padding-left:18px">#</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Camera</th>
+              <th>Students</th>
+            </tr>
+          </thead>
+          <tbody id="report-body">
+            <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+<script src="/static/js/common.js"></script>
+<script>
+let _data=null;
+
+async function loadReport(){
+  const date=document.getElementById('f-date').value;
+  const cam=document.getElementById('f-cam').value;
+  let url='/api/report?';
+  if(date) url+=`date=${date}&`;
+  if(cam!=='') url+=`camera=${parseInt(cam)+1}&`;
+
+  document.getElementById('report-body').innerHTML='<tr><td colspan="5" class="loading"><div class="spinner"></div>Loading…</td></tr>';
+  try{
+    const r=await fetch(url);
+    _data=await r.json();
+
+    document.getElementById('s-logs').textContent=_data.total_logs??'—';
+    document.getElementById('s-peak').textContent=_data.peak_count??'—';
+    document.getElementById('s-avg').textContent=_data.avg_count??'—';
+    document.getElementById('s-caps').textContent=_data.total_captures??'—';
+    document.getElementById('s-alerts').textContent=_data.total_alerts??'—';
+
+    const rows=_data.recent_logs||[];
+    document.getElementById('row-count').textContent=`${rows.length} records`;
+    document.getElementById('report-body').innerHTML=rows.length?
+      rows.map((l,i)=>`<tr>
+        <td class="td-muted" style="padding-left:18px">${i+1}</td>
+        <td class="td-mono td-muted">${l.date}</td>
+        <td class="td-mono td-accent">${l.time}</td>
+        <td><span class="badge badge-info">CAM ${l.camera}</span></td>
+        <td class="td-mono td-green">${l.count}</td>
+      </tr>`).join(''):
+      '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No data for selected filter.</td></tr>';
+  }catch(e){showToast('Load error','error');}
+}
+
+function clearFilters(){
+  document.getElementById('f-date').value='';
+  document.getElementById('f-cam').value='';
+  loadReport();
+}
+
+function dlJson(){
+  const date=document.getElementById('f-date').value;
+  const cam=document.getElementById('f-cam').value;
+  let url='/api/report?';
+  if(date) url+=`date=${date}&`;
+  if(cam!=='') url+=`camera=${parseInt(cam)+1}&`;
+  window.open(url,'_blank');
+  document.getElementById('dl-status').textContent='JSON download opened ✓';
+  setTimeout(()=>document.getElementById('dl-status').textContent='',3000);
+}
+
+function dlCsv(){
+  const date=document.getElementById('f-date').value;
+  const cam=document.getElementById('f-cam').value;
+  let url='/api/report/csv?';
+  if(date) url+=`date=${date}&`;
+  if(cam!=='') url+=`camera=${parseInt(cam)+1}&`;
+  window.location.href=url;
+  document.getElementById('dl-status').textContent='CSV downloading… ✓';
+  setTimeout(()=>document.getElementById('dl-status').textContent='',3000);
+}
+
+async function sendEmail(){
+  document.getElementById('dl-status').textContent='Sending email…';
+  try{
+    const r=await fetch('/api/report/email',{method:'POST'});
+    const d=await r.json();
+    showToast(d.message,d.status==='ok'?'ok':'error');
+    document.getElementById('dl-status').textContent=d.message;
+    setTimeout(()=>document.getElementById('dl-status').textContent='',4000);
+  }catch(e){showToast('Email error','error');}
+}
+
+// Set today's date as default
+const today=new Date().toISOString().split('T')[0];
+document.getElementById('f-date').value=today;
+loadReport();
+</script>
+</body>
+</html>

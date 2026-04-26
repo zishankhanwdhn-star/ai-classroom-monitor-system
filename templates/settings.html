@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Monitor v3 — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/base.css">
+<style>
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.section-title{font-family:var(--fh);font-size:.72rem;letter-spacing:2.5px;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.range-wrap{display:flex;align-items:center;gap:12px}
+input[type=range]{flex:1;appearance:none;height:4px;border-radius:2px;background:rgba(0,238,255,.2);outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(0,238,255,.5)}
+.range-val{font-family:var(--fm);font-size:1.1rem;color:var(--accent);min-width:36px;text-align:right}
+.save-bar{position:sticky;bottom:0;z-index:50;background:rgba(2,8,20,.92);backdrop-filter:blur(16px);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:14px;margin:0 -20px}
+.note{font-size:.72rem;color:var(--muted);margin-top:6px;line-height:1.5}
+.email-status{padding:10px 14px;border-radius:var(--r3);font-size:.8rem;margin-top:10px;display:none}
+.email-status.ok{background:rgba(0,255,153,.1);border:1px solid rgba(0,255,153,.3);color:var(--green);display:block}
+.email-status.err{background:rgba(255,34,68,.1);border:1px solid rgba(255,34,68,.3);color:var(--danger);display:block}
+@media(max-width:900px){.settings-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg-orb ob1"></div><div class="bg-orb ob2"></div><div class="bg-orb ob3"></div>
+<nav>
+  <a href="/dashboard" class="nav-brand"><div class="nav-logo">🎓</div><div><div class="nav-name">AI CLASSROOM MONITOR</div><div class="nav-sub">v3 PROFESSIONAL</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link"><span class="nl-icon">📡</span><span class="nl-text">Dashboard</span></a>
+    <a href="/analytics" class="nav-link"><span class="nl-icon">📊</span><span class="nl-text">Analytics</span></a>
+    <a href="/reports"   class="nav-link"><span class="nl-icon">📋</span><span class="nl-text">Reports</span></a>
+    <a href="/logs"      class="nav-link"><span class="nl-icon">📝</span><span class="nl-text">Logs</span></a>
+    <a href="/settings"  class="nav-link active"><span class="nl-icon">⚙️</span><span class="nl-text">Settings</span></a>
+    <a href="/admin"     class="nav-link"><span class="nl-icon">🛡️</span><span class="nl-text">Admin</span></a>
+  </div>
+  <div class="nav-right"><span id="clock">--:--:--</span><a href="/logout" class="nbtn logout">⏻</a></div>
+</nav>
+<div class="page" style="padding-bottom:80px">
+  <div class="page-header">
+    <div><div class="page-title">⚙️ SETTINGS</div><div class="page-sub">SYSTEM CONFIGURATION & PREFERENCES</div></div>
+  </div>
+
+  <div class="settings-grid">
+
+    <!-- LEFT: Detection & Behavior -->
+    <div>
+      <div class="section-title">🎯 DETECTION SETTINGS</div>
+      <div class="panel" style="margin-bottom:18px">
+        <div class="pb">
+          <!-- Overcrowd limit -->
+          <div class="form-group">
+            <label class="form-label">Overcrowding Alert Limit (students)</label>
+            <div class="range-wrap">
+              <input type="range" id="overcrowd_limit" min="5" max="100" step="1"
+                     value="{{ settings.overcrowd_limit|default('30') }}"
+                     oninput="document.getElementById('limit-val').textContent=this.value">
+              <span class="range-val" id="limit-val">{{ settings.overcrowd_limit|default('30') }}</span>
+            </div>
+            <p class="note">Alert triggers when detected students exceed this number.</p>
+          </div>
+
+          <!-- Toggles -->
+          <div class="toggle-wrap">
+            <div class="toggle-info">
+              <div class="toggle-name">Overcrowding Alerts</div>
+              <div class="toggle-desc">Show red alert banner and play sound</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="alerts_enabled" {% if settings.alerts_enabled=='1' %}checked{% endif %}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-wrap">
+            <div class="toggle-info">
+              <div class="toggle-name">Auto Capture (30 min)</div>
+              <div class="toggle-desc">Automatically save snapshots every 30 minutes</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="auto_capture" {% if settings.auto_capture=='1' %}checked{% endif %}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-wrap">
+            <div class="toggle-info">
+              <div class="toggle-name">Auto-Refresh Dashboard</div>
+              <div class="toggle-desc">Dashboard polls stats every 2 seconds</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="auto_refresh" {% if settings.auto_refresh=='1' %}checked{% endif %}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">🗄️ DATA MANAGEMENT</div>
+      <div class="panel">
+        <div class="pb">
+          <div class="form-group">
+            <label class="form-label">Auto-Delete Logs Older Than (days)</label>
+            <div class="range-wrap">
+              <input type="range" id="auto_delete_days" min="1" max="30" step="1"
+                     value="{{ settings.auto_delete_days|default('1') }}"
+                     oninput="document.getElementById('del-val').textContent=this.value">
+              <span class="range-val" id="del-val">{{ settings.auto_delete_days|default('1') }}</span>
+            </div>
+            <p class="note">Logs older than this many days are deleted automatically on startup.</p>
+          </div>
+          <button class="btn btn-danger btn-full" onclick="clearDataNow()" style="margin-top:10px">
+            🗑 CLEAR ALL LOGS NOW
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Email Notifications -->
+    <div>
+      <div class="section-title">📧 EMAIL NOTIFICATIONS</div>
+      <div class="panel" style="margin-bottom:18px">
+        <div class="pb">
+          <div class="toggle-wrap" style="margin-bottom:14px">
+            <div class="toggle-info">
+              <div class="toggle-name">Enable Email Notifications</div>
+              <div class="toggle-desc">Send alerts and reports via email</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="email_enabled" {% if settings.email_enabled=='1' %}checked{% endif %} onchange="toggleEmailFields()">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div id="email-fields">
+            <div class="form-group">
+              <label class="form-label">Recipient Email Address</label>
+              <input type="email" id="email_address" class="form-input" placeholder="recipient@example.com"
+                     value="{{ settings.email_address|default('') }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gmail Sender Address</label>
+              <input type="email" id="email_user" class="form-input" placeholder="your.gmail@gmail.com"
+                     value="{{ settings.email_user|default('') }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gmail App Password</label>
+              <input type="password" id="email_pass" class="form-input" placeholder="xxxx xxxx xxxx xxxx"
+                     value="{{ settings.email_pass|default('') }}">
+              <p class="note">Use a Gmail App Password (not your regular password).<br>
+              Gmail → Account → Security → 2FA → App Passwords</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div class="form-group" style="flex:1;margin-bottom:0">
+                <label class="form-label">SMTP Server</label>
+                <input type="text" id="email_smtp" class="form-input" value="{{ settings.email_smtp|default('smtp.gmail.com') }}">
+              </div>
+              <div class="form-group" style="width:100px;margin-bottom:0">
+                <label class="form-label">Port</label>
+                <input type="number" id="email_port" class="form-input" value="{{ settings.email_port|default('587') }}">
+              </div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="testEmail()">🔌 TEST CONNECTION</button>
+            </div>
+            <div class="email-status" id="email-status"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">ℹ️ SYSTEM INFO</div>
+      <div class="panel">
+        <div class="pb">
+          <ul class="sys-list">
+            <li><span class="sys-k">Version</span><span class="sys-v">v3.0 Professional</span></li>
+            <li><span class="sys-k">AI Model</span><span class="sys-v">YOLOv8n</span></li>
+            <li><span class="sys-k">DB Engine</span><span class="sys-v" style="color:var(--green)">SQLite ✓</span></li>
+            <li><span class="sys-k">Email</span><span class="sys-v">smtplib (built-in)</span></li>
+            <li><span class="sys-k">Auto Capture</span><span class="sys-v">Every 30 min</span></li>
+            <li><span class="sys-k">Stream</span><span class="sys-v">MJPEG ~25fps</span></li>
+            <li><span class="sys-k">Camera</span><span class="sys-v">Webcam Index 0</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /settings-grid -->
+
+  <!-- Sticky save bar -->
+  <div class="save-bar">
+    <button class="btn btn-primary btn-lg" onclick="saveSettings()">💾 SAVE ALL SETTINGS</button>
+    <span id="save-msg" style="font-size:.78rem;color:var(--muted)"></span>
+  </div>
+
+</div>
+<div id="toast"></div>
+<script src="/static/js/common.js"></script>
+<script>
+function toggleEmailFields(){
+  const enabled=document.getElementById('email_enabled').checked;
+  document.getElementById('email-fields').style.opacity=enabled?'1':'.4';
+  document.getElementById('email-fields').style.pointerEvents=enabled?'all':'none';
+}
+toggleEmailFields();
+
+function getSettings(){
+  return {
+    overcrowd_limit:   document.getElementById('overcrowd_limit').value,
+    alerts_enabled:    document.getElementById('alerts_enabled').checked?'1':'0',
+    auto_capture:      document.getElementById('auto_capture').checked?'1':'0',
+    auto_refresh:      document.getElementById('auto_refresh').checked?'1':'0',
+    email_enabled:     document.getElementById('email_enabled').checked?'1':'0',
+    email_address:     document.getElementById('email_address').value,
+    email_user:        document.getElementById('email_user').value,
+    email_pass:        document.getElementById('email_pass').value,
+    email_smtp:        document.getElementById('email_smtp').value,
+    email_port:        document.getElementById('email_port').value,
+    auto_delete_days:  document.getElementById('auto_delete_days').value,
+  };
+}
+
+async function saveSettings(){
+  const btn=document.querySelector('.save-bar button');
+  btn.disabled=true;btn.textContent='Saving…';
+  try{
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(getSettings())});
+    const d=await r.json();
+    document.getElementById('save-msg').textContent=d.message;
+    document.getElementById('save-msg').style.color='var(--green)';
+    showToast('✅ Settings saved!','ok');
+    setTimeout(()=>document.getElementById('save-msg').textContent='',4000);
+  }catch(e){showToast('Save failed','error');}
+  finally{btn.disabled=false;btn.textContent='💾 SAVE ALL SETTINGS';}
+}
+
+async function testEmail(){
+  const statusEl=document.getElementById('email-status');
+  statusEl.className='email-status';statusEl.textContent='Testing…';statusEl.style.display='block';
+  try{
+    const r=await fetch('/api/settings/email/test',{method:'POST'});
+    const d=await r.json();
+    statusEl.className=`email-status ${d.status==='ok'?'ok':'err'}`;
+    statusEl.textContent=d.message;
+  }catch(e){statusEl.className='email-status err';statusEl.textContent='Connection test failed.';}
+}
+
+async function clearDataNow(){
+  if(!confirm('Delete ALL logs permanently?')) return;
+  try{
+    await fetch('/api/logs/clear',{method:'POST'});
+    showToast('✅ All logs cleared.','ok');
+  }catch(e){showToast('Clear failed','error');}
+}
+</script>
+</body>
+</html>

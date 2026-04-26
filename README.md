@@ -1,3 +1,5 @@
+<h1 align="center">🚀 AI Classroom Monitor System</h1>
+<p align="center">Smart AI Surveillance System using YOLOv8</p>
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/AI-YOLOv8-red?style=for-the-badge" />
@@ -102,7 +104,7 @@ pip install -r requirements.txt
 
 👉 Recommended command:
 
-py -3.11 app.py
+ppyy -3.11 app.
 
 👉 OR:
 

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Monitor v3 — Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/base.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+.chart-wrap{position:relative;height:240px}
+.compare-bar{height:12px;border-radius:6px;background:rgba(0,238,255,.15);margin-bottom:6px;overflow:hidden}
+.compare-fill{height:100%;border-radius:6px;transition:width .8s ease}
+.compare-row{margin-bottom:16px}
+.compare-label{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:5px}
+.compare-label span:last-child{font-family:var(--fm);color:var(--text)}
+.kpi-mini{--card-line:var(--c,var(--accent))}
+.kpi-mini.k0{--c:var(--accent)}.kpi-mini.k1{--c:var(--green)}.kpi-mini.k2{--c:var(--yellow)}.kpi-mini.k3{--c:var(--orange)}
+.kpi-val{font-family:var(--fh);font-size:1.8rem;font-weight:700;color:var(--c,var(--accent));margin-bottom:3px}
+.kpi-lbl{font-size:.63rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+.kpi-delta{font-size:.68rem;margin-top:4px}
+.delta-up{color:var(--danger)}.delta-dn{color:var(--green)}.delta-eq{color:var(--muted)}
+@media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}.grid-4{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="bg-orb ob1"></div><div class="bg-orb ob2"></div><div class="bg-orb ob3"></div>
+<nav>
+  <a href="/dashboard" class="nav-brand"><div class="nav-logo">🎓</div><div><div class="nav-name">AI CLASSROOM MONITOR</div><div class="nav-sub">v3 PROFESSIONAL</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link"><span class="nl-icon">📡</span><span class="nl-text">Dashboard</span></a>
+    <a href="/analytics" class="nav-link active"><span class="nl-icon">📊</span><span class="nl-text">Analytics</span></a>
+    <a href="/reports"   class="nav-link"><span class="nl-icon">📋</span><span class="nl-text">Reports</span></a>
+    <a href="/logs"      class="nav-link"><span class="nl-icon">📝</span><span class="nl-text">Logs</span></a>
+    <a href="/settings"  class="nav-link"><span class="nl-icon">⚙️</span><span class="nl-text">Settings</span></a>
+    <a href="/admin"     class="nav-link"><span class="nl-icon">🛡️</span><span class="nl-text">Admin</span></a>
+  </div>
+  <div class="nav-right"><span id="clock">--:--:--</span><a href="/logout" class="nbtn logout">⏻</a></div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div><div class="page-title">📊 ANALYTICS</div><div class="page-sub">24-HOUR STUDENT TREND ANALYSIS</div></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="last-upd" style="font-size:.68rem;color:var(--muted)">Updating…</span>
+      <button class="btn btn-ghost btn-sm" onclick="load()">🔄 REFRESH</button>
+    </div>
+  </div>
+
+  <!-- KPI row -->
+  <div class="grid-4" style="margin-bottom:18px">
+    <div class="card kpi-mini k0"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Peak (All Time)</div></div>
+    <div class="card kpi-mini k1"><div class="kpi-val" id="k-avg">—</div><div class="kpi-lbl">Average Count</div></div>
+    <div class="card kpi-mini k2"><div class="kpi-val" id="k-today-pk">—</div><div class="kpi-lbl">Today's Peak</div><div class="kpi-delta" id="k-today-delta">—</div></div>
+    <div class="card kpi-mini k3"><div class="kpi-val" id="k-yest-pk">—</div><div class="kpi-lbl">Yesterday Peak</div></div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:18px">
+    <!-- Hourly line chart -->
+    <div class="panel">
+      <div class="ph"><span class="pt">Hourly Student Trend (24h)</span><span class="ps">AVG + PEAK</span></div>
+      <div class="pb"><div class="chart-wrap"><canvas id="chart-hourly"></canvas></div></div>
+    </div>
+
+    <!-- Peak bar chart -->
+    <div class="panel">
+      <div class="ph"><span class="pt">Peak Per Hour (24h)</span><span class="ps">MAX VALUES</span></div>
+      <div class="pb"><div class="chart-wrap"><canvas id="chart-peak"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:18px">
+    <!-- Today vs Yesterday comparison -->
+    <div class="panel">
+      <div class="ph"><span class="pt">Today vs Yesterday</span><span class="ps">COMPARISON</span></div>
+      <div class="pb" id="compare-body">
+        <div class="loading"><div class="spinner"></div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- Camera comparison -->
+    <div class="panel">
+      <div class="ph"><span class="pt">Camera-wise Stats</span><span class="ps">PER CAMERA</span></div>
+      <div class="pb">
+        <div class="chart-wrap" style="height:200px"><canvas id="chart-cam"></canvas></div>
+        <div id="cam-table-wrap" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+<div id="toast"></div>
+<script src="/static/js/common.js"></script>
+<script>
+Chart.defaults.color='rgba(140,195,245,.5)';
+Chart.defaults.borderColor='rgba(0,238,255,.1)';
+Chart.defaults.font.family="'Exo 2',sans-serif";
+
+const TT={backgroundColor:'rgba(2,10,26,.95)',borderColor:'rgba(0,238,255,.25)',borderWidth:1};
+const GRID={color:'rgba(0,238,255,.07)'};
+
+const hourlyChart=new Chart(document.getElementById('chart-hourly').getContext('2d'),{
+  type:'line',
+  data:{labels:[],datasets:[
+    {label:'Avg',data:[],borderColor:'#00eeff',backgroundColor:'rgba(0,238,255,.08)',borderWidth:2,pointRadius:3,tension:.4,fill:true},
+    {label:'Peak',data:[],borderColor:'#ff8800',backgroundColor:'transparent',borderWidth:2,borderDash:[5,3],pointRadius:2,tension:.4},
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'rgba(140,195,245,.7)',font:{size:11}}},tooltip:TT},scales:{x:{ticks:{color:'rgba(140,195,245,.5)',font:{size:9}},grid:GRID},y:{ticks:{color:'rgba(140,195,245,.5)',font:{size:9}},grid:GRID,beginAtZero:true}}}
+});
+
+const peakChart=new Chart(document.getElementById('chart-peak').getContext('2d'),{
+  type:'bar',
+  data:{labels:[],datasets:[{label:'Peak',data:[],backgroundColor:'rgba(255,136,0,.22)',borderColor:'#ff8800',borderWidth:1.5,borderRadius:4}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:TT},scales:{x:{ticks:{color:'rgba(140,195,245,.5)',font:{size:8},maxRotation:45},grid:{display:false}},y:{ticks:{color:'rgba(140,195,245,.5)',font:{size:9}},grid:GRID,beginAtZero:true}}}
+});
+
+const camChart=new Chart(document.getElementById('chart-cam').getContext('2d'),{
+  type:'doughnut',
+  data:{labels:['Cam 1','Cam 2','Cam 3','Cam 4'],datasets:[{data:[0,0,0,0],backgroundColor:['rgba(0,238,255,.4)','rgba(0,255,153,.4)','rgba(176,96,255,.4)','rgba(255,136,0,.4)'],borderColor:['#00eeff','#00ff99','#b060ff','#ff8800'],borderWidth:1.5}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'rgba(140,195,245,.6)',font:{size:10},padding:10}},tooltip:TT}}
+});
+
+async function load(){
+  try{
+    const r=await fetch('/api/analytics');
+    const d=await r.json();
+    document.getElementById('last-upd').textContent=`Updated: ${d.generated}`;
+
+    // KPIs
+    document.getElementById('k-peak').textContent=d.peak??'—';
+    document.getElementById('k-avg').textContent=d.avg??'—';
+    document.getElementById('k-today-pk').textContent=d.today?.peak??'—';
+    document.getElementById('k-yest-pk').textContent=d.yesterday?.peak??'—';
+
+    // Delta indicator
+    const todayPk=d.today?.peak||0, yestPk=d.yesterday?.peak||0;
+    const deltaEl=document.getElementById('k-today-delta');
+    if(yestPk>0){
+      const diff=todayPk-yestPk;
+      const pct=Math.round(Math.abs(diff)/yestPk*100);
+      deltaEl.className=`kpi-delta ${diff>0?'delta-up':diff<0?'delta-dn':'delta-eq'}`;
+      deltaEl.textContent=`${diff>0?'▲':'▼'} ${pct}% vs yesterday`;
+    } else { deltaEl.textContent='No yesterday data'; deltaEl.className='kpi-delta delta-eq'; }
+
+    // Hourly charts
+    if(d.hourly?.length){
+      hourlyChart.data.labels=d.hourly.map(h=>h.hour);
+      hourlyChart.data.datasets[0].data=d.hourly.map(h=>h.avg);
+      hourlyChart.data.datasets[1].data=d.hourly.map(h=>h.max);
+      hourlyChart.update('none');
+      peakChart.data.labels=d.hourly.map(h=>h.hour);
+      peakChart.data.datasets[0].data=d.hourly.map(h=>h.max);
+      peakChart.update('none');
+    }
+
+    // Camera comparison chart
+    if(d.camera?.length){
+      const totals=d.camera.map(c=>c.records);
+      camChart.data.datasets[0].data=totals.length?totals:[0,0,0,0];
+      camChart.update('none');
+
+      document.getElementById('cam-table-wrap').innerHTML=`
+        <table class="data-table">
+          <thead><tr><th>Camera</th><th>Records</th><th>Avg</th><th>Peak</th></tr></thead>
+          <tbody>${d.camera.map(c=>`<tr>
+            <td class="td-accent td-mono">CAM ${c.camera}</td>
+            <td class="td-mono">${c.records}</td>
+            <td class="td-green td-mono">${c.avg}</td>
+            <td class="td-danger td-mono">${c.peak}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    // Today vs Yesterday comparison
+    const today=d.today||{},yest=d.yesterday||{};
+    const maxVal=Math.max(today.peak||0,yest.peak||0,1);
+    document.getElementById('compare-body').innerHTML=`
+      <div class="compare-row">
+        <div class="compare-label"><span>Peak Students</span></div>
+        <div class="compare-label"><span>Today</span><span>${today.peak||0}</span></div>
+        <div class="compare-bar"><div class="compare-fill" style="width:${(today.peak||0)/maxVal*100}%;background:linear-gradient(90deg,#0052ff,#00eeff)"></div></div>
+        <div class="compare-label" style="margin-top:8px"><span>Yesterday</span><span>${yest.peak||0}</span></div>
+        <div class="compare-bar"><div class="compare-fill" style="width:${(yest.peak||0)/maxVal*100}%;background:linear-gradient(90deg,#ff8800,#ffd700)"></div></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-label"><span>Average Students</span></div>
+        <div class="compare-label"><span>Today</span><span>${today.avg||0}</span></div>
+        <div class="compare-bar"><div class="compare-fill" style="width:${(today.avg||0)/maxVal*100}%;background:linear-gradient(90deg,#0052ff,#00ff99)"></div></div>
+        <div class="compare-label" style="margin-top:8px"><span>Yesterday</span><span>${yest.avg||0}</span></div>
+        <div class="compare-bar"><div class="compare-fill" style="width:${(yest.avg||0)/maxVal*100}%;background:linear-gradient(90deg,#ff8800,#ffcc00)"></div></div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-label"><span>Total Records</span></div>
+        <div style="display:flex;gap:20px;margin-top:6px">
+          <div class="rpt-mini" style="flex:1"><div class="rpt-mini-lbl">Today</div><div class="rpt-mini-val">${today.records||0}</div></div>
+          <div class="rpt-mini" style="flex:1"><div class="rpt-mini-lbl">Yesterday</div><div class="rpt-mini-val" style="color:var(--orange)">${yest.records||0}</div></div>
+        </div>
+      </div>`;
+
+  }catch(e){console.error(e);showToast('Analytics load error','error');}
+}
+
+load();
+setInterval(load,8000);
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Monitor v3 — Logs</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/base.css">
+<style>
+.filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r1);margin-bottom:16px;backdrop-filter:blur(16px)}
+.search-wrap{position:relative;flex:1;min-width:160px}
+.search-wrap input{width:100%;padding:8px 12px 8px 36px;background:rgba(0,15,40,.65);border:1px solid rgba(0,238,255,.18);border-radius:var(--r3);color:var(--text);font-size:.85rem;outline:none;transition:border-color .25s}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.9rem}
+.tab-bar{display:flex;gap:4px;margin-bottom:16px}
+.tab{padding:8px 20px;border-radius:var(--r3);font-family:var(--fh);font-size:.65rem;letter-spacing:2px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .2s}
+.tab.active{color:var(--accent);background:rgba(0,238,255,.1);border-color:rgba(0,238,255,.28)}
+.tab:hover:not(.active){color:var(--text);background:rgba(0,238,255,.05)}
+.table-wrap{overflow-x:auto;max-height:480px;overflow-y:auto}
+.alert-level-warn{color:var(--orange);font-size:.72rem;padding:2px 8px;background:rgba(255,136,0,.1);border-radius:20px}
+.alert-level-critical{color:var(--danger);font-size:.72rem;padding:2px 8px;background:rgba(255,34,68,.1);border-radius:20px}
+</style>
+</head>
+<body>
+<div class="bg-orb ob1"></div><div class="bg-orb ob2"></div><div class="bg-orb ob3"></div>
+<nav>
+  <a href="/dashboard" class="nav-brand"><div class="nav-logo">🎓</div><div><div class="nav-name">AI CLASSROOM MONITOR</div><div class="nav-sub">v3 PROFESSIONAL</div></div></a>
+  <div class="nav-links">
+    <a href="/dashboard" class="nav-link"><span class="nl-icon">📡</span><span class="nl-text">Dashboard</span></a>
+    <a href="/analytics" class="nav-link"><span class="nl-icon">📊</span><span class="nl-text">Analytics</span></a>
+    <a href="/reports"   class="nav-link"><span class="nl-icon">📋</span><span class="nl-text">Reports</span></a>
+    <a href="/logs"      class="nav-link active"><span class="nl-icon">📝</span><span class="nl-text">Logs</span></a>
+    <a href="/settings"  class="nav-link"><span class="nl-icon">⚙️</span><span class="nl-text">Settings</span></a>
+    <a href="/admin"     class="nav-link"><span class="nl-icon">🛡️</span><span class="nl-text">Admin</span></a>
+  </div>
+  <div class="nav-right"><span id="clock">--:--:--</span><a href="/logout" class="nbtn logout">⏻</a></div>
+</nav>
+<div class="page">
+  <div class="page-header">
+    <div><div class="page-title">📝 ACTIVITY LOGS</div><div class="page-sub">SEARCH, FILTER & MANAGE SYSTEM LOGS</div></div>
+    <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 CLEAR ALL LOGS</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab active" id="tab-count" onclick="switchTab('count')">COUNT LOGS</button>
+    <button class="tab" id="tab-alerts" onclick="switchTab('alerts')">ALERT HISTORY</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <span class="search-ico">🔍</span>
+    <div class="search-wrap">
+      <span class="search-ico">🔍</span>
+      <input type="text" id="f-search" placeholder="Search by count (e.g. 5)…" oninput="applyFilter()">
+    </div>
+    <input type="date" id="f-date" class="form-input" style="color-scheme:dark;width:160px;padding:8px 12px" onchange="applyFilter()">
+    <select id="f-cam" class="form-input form-select" style="width:130px;padding:8px 12px" onchange="applyFilter()">
+      <option value="">All Cameras</option>
+      <option value="0">Camera 1</option>
+      <option value="1">Camera 2</option>
+      <option value="2">Camera 3</option>
+      <option value="3">Camera 4</option>
+    </select>
+    <select id="f-limit" class="form-input form-select" style="width:110px;padding:8px 12px" onchange="applyFilter()">
+      <option value="50">50 rows</option>
+      <option value="100" selected>100 rows</option>
+      <option value="500">500 rows</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="clearFilter()">✕ CLEAR</button>
+    <span style="font-size:.7rem;color:var(--muted)" id="row-cnt">—</span>
+  </div>
+
+  <!-- Count Logs table -->
+  <div id="pane-count">
+    <div class="panel">
+      <div class="ph"><span class="pt">Count Logs</span><span class="ps" id="log-refresh">AUTO-REFRESH</span></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th style="padding-left:18px">#</th><th>Date</th><th>Time</th><th>Camera</th><th>Students Detected</th></tr></thead>
+          <tbody id="log-body"><tr><td colspan="5" class="loading"><div class="spinner"></div>Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert History table -->
+  <div id="pane-alerts" style="display:none">
+    <div class="panel">
+      <div class="ph"><span class="pt">Alert History</span></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th style="padding-left:18px">#</th><th>Date</th><th>Time</th><th>Level</th><th>Count</th><th>Message</th></tr></thead>
+          <tbody id="alert-body"><tr><td colspan="6" class="loading"><div class="spinner"></div>Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+<script src="/static/js/common.js"></script>
+<script>
+let _tab='count';
+
+function switchTab(t){
+  _tab=t;
+  document.getElementById('pane-count').style.display=t==='count'?'block':'none';
+  document.getElementById('pane-alerts').style.display=t==='alerts'?'block':'none';
+  document.getElementById('tab-count').className='tab'+(t==='count'?' active':'');
+  document.getElementById('tab-alerts').className='tab'+(t==='alerts'?' active':'');
+  if(t==='alerts') loadAlerts();
+}
+
+async function applyFilter(){
+  const search=document.getElementById('f-search').value;
+  const date=document.getElementById('f-date').value;
+  const cam=document.getElementById('f-cam').value;
+  const limit=document.getElementById('f-limit').value;
+  let url=`/api/logs?limit=${limit}`;
+  if(search) url+=`&search=${encodeURIComponent(search)}`;
+  if(date)   url+=`&date=${date}`;
+  if(cam!=='') url+=`&camera=${cam}`;
+
+  document.getElementById('log-body').innerHTML='<tr><td colspan="5" class="loading"><div class="spinner"></div>Filtering…</td></tr>';
+  try{
+    const r=await fetch(url);
+    const d=await r.json();
+    const rows=d.logs||[];
+    document.getElementById('row-cnt').textContent=`${rows.length} records`;
+    document.getElementById('log-body').innerHTML=rows.length?
+      rows.map((l,i)=>`<tr>
+        <td class="td-muted" style="padding-left:18px;font-size:.72rem">${i+1}</td>
+        <td class="td-mono td-muted">${l.date}</td>
+        <td class="td-mono td-accent">${l.time}</td>
+        <td><span class="badge badge-info">CAM ${l.camera}</span></td>
+        <td class="td-mono td-green" style="font-size:.9rem;font-weight:600">${l.count}</td>
+      </tr>`).join(''):
+      '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No records found.</td></tr>';
+  }catch(e){showToast('Load error','error');}
+}
+
+async function loadAlerts(){
+  document.getElementById('alert-body').innerHTML='<tr><td colspan="6" class="loading"><div class="spinner"></div>Loading…</td></tr>';
+  try{
+    const r=await fetch('/api/alerts/history');
+    const d=await r.json();
+    const rows=d.alerts||[];
+    document.getElementById('alert-body').innerHTML=rows.length?
+      rows.map((a,i)=>`<tr>
+        <td class="td-muted" style="padding-left:18px;font-size:.72rem">${i+1}</td>
+        <td class="td-mono td-muted">${a.date}</td>
+        <td class="td-mono td-accent">${a.time}</td>
+        <td><span class="alert-level-${a.level}">${a.level.toUpperCase()}</span></td>
+        <td class="td-mono td-danger" style="font-weight:600">${a.count}</td>
+        <td style="font-size:.76rem;color:var(--text)">${a.message}</td>
+      </tr>`).join(''):
+      '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No alerts recorded yet.</td></tr>';
+  }catch(e){showToast('Load error','error');}
+}
+
+async function clearLogs(){
+  if(!confirm('Clear ALL logs and alert history? This cannot be undone.')) return;
+  try{
+    await fetch('/api/logs/clear',{method:'POST'});
+    showToast('✅ All logs cleared.','ok');
+    applyFilter();
+    if(_tab==='alerts') loadAlerts();
+  }catch(e){showToast('Clear failed','error');}
+}
+
+function clearFilter(){
+  document.getElementById('f-search').value='';
+  document.getElementById('f-date').value='';
+  document.getElementById('f-cam').value='';
+  document.getElementById('f-limit').value='100';
+  applyFilter();
+}
+
+applyFilter();
+setInterval(()=>{ if(_tab==='count') applyFilter(); }, 10000);
+</script>
+</body>
+</html>

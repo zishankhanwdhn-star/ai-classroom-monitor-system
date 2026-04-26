@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Monitor v3 — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/base.css">
+<style>
+/* Dashboard-specific styles */
+.main{display:grid;grid-template-columns:1fr 330px;gap:18px}
+.full{grid-column:1/-1}
+
+/* Alert banner */
+#alert-banner{display:none;align-items:center;gap:16px;background:rgba(255,34,68,.08);border:1px solid rgba(255,34,68,.4);border-radius:var(--r2);padding:14px 22px;font-size:.9rem;color:var(--danger);animation:alertPulse 1.8s ease-in-out infinite}
+#alert-banner.show{display:flex}
+@keyframes alertPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 28px rgba(255,34,68,.2)}}
+.alert-icon{font-size:1.6rem}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:13px}
+.stat{--card-line:var(--c,var(--accent))}
+.stat.c0{--c:var(--accent)}.stat.c1{--c:var(--green)}.stat.c2{--c:var(--yellow)}.stat.c3{--c:var(--purple)}.stat.c4{--c:var(--orange)}
+.stat-val{color:var(--c,var(--accent))}
+
+/* Camera loading shimmer */
+.cam-loading{position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,18,42,.8) 25%,rgba(0,238,255,.04) 50%,rgba(5,18,42,.8) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;display:flex;align-items:center;justify-content:center;z-index:5;font-size:.75rem;color:var(--muted);letter-spacing:1px;gap:8px}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+.cam-video-wrap{position:relative}
+
+/* Behavior badge */
+.behavior-badge{position:absolute;top:10px;right:10px;padding:2px 9px;border-radius:20px;font-size:.62rem;letter-spacing:1px;font-weight:600;z-index:3;backdrop-filter:blur(4px)}
+.beh-empty   {background:rgba(80,80,100,.6);color:#aaa}
+.beh-low     {background:rgba(0,255,153,.12);border:1px solid rgba(0,255,153,.25);color:var(--green)}
+.beh-moderate{background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.25);color:var(--yellow)}
+.beh-high    {background:rgba(255,136,0,.14);border:1px solid rgba(255,136,0,.3);color:var(--orange)}
+.beh-overcrowded{background:rgba(255,34,68,.14);border:1px solid rgba(255,34,68,.35);color:var(--danger);animation:alertPulse 1.5s infinite}
+
+/* Sidebar */
+.sidebar{display:flex;flex-direction:column;gap:15px}
+#log-list{list-style:none;max-height:210px;overflow-y:auto}
+#log-list li{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(0,238,255,.05);font-size:.75rem;animation:logIn .3s ease both}
+@keyframes logIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+#log-list li:last-child{border-bottom:none}
+.log-num{font-family:var(--fm);color:var(--green);font-size:.88rem;font-weight:600;min-width:28px;text-align:right}
+.log-lbl{color:var(--muted);font-size:.68rem;flex:1}
+.log-t{color:var(--muted);font-size:.63rem;white-space:nowrap}
+.log-empty{color:var(--muted);font-size:.78rem;text-align:center;padding:18px 0;display:block}
+
+/* Rpt mini */
+.rpt-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}
+.rpt-mini{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:12px}
+.rpt-mini-lbl{font-size:.6rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+.rpt-mini-val{font-family:var(--fh);font-size:1.35rem;color:var(--accent)}
+
+/* Sys info */
+.sys-list{list-style:none}
+.sys-list li{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(0,238,255,.05);font-size:.75rem}
+.sys-list li:last-child{border-bottom:none}
+.sys-k{color:var(--muted);font-size:.7rem}
+.sys-v{font-family:var(--fm);font-size:.73rem;color:var(--accent)}
+
+@media(max-width:1100px){.main{grid-template-columns:1fr};.stats-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr};.cam-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg-orb ob1"></div><div class="bg-orb ob2"></div><div class="bg-orb ob3"></div>
+
+<!-- Alert popup -->
+<div id="alert-popup">
+  <button class="alert-popup-close" id="alert-popup-close">✕</button>
+  <div class="alert-popup-icon">🚨</div>
+  <div class="alert-popup-title">OVERCROWDING ALERT</div>
+  <div class="alert-popup-msg" id="alert-popup-msg"></div>
+</div>
+
+<!-- Navbar -->
+<nav>
+  <a href="/dashboard" class="nav-brand">
+    <div class="nav-logo">🎓</div>
+    <div><div class="nav-name">AI CLASSROOM MONITOR</div><div class="nav-sub">v3 PROFESSIONAL</div></div>
+  </a>
+  <div class="nav-links">
+    <a href="/dashboard"  class="nav-link {% if active=='dashboard' %}active{% endif %}"><span class="nl-icon">📡</span><span class="nl-text">Dashboard</span></a>
+    <a href="/analytics"  class="nav-link {% if active=='analytics' %}active{% endif %}"><span class="nl-icon">📊</span><span class="nl-text">Analytics</span></a>
+    <a href="/reports"    class="nav-link {% if active=='reports'   %}active{% endif %}"><span class="nl-icon">📋</span><span class="nl-text">Reports</span></a>
+    <a href="/logs"       class="nav-link {% if active=='logs'      %}active{% endif %}"><span class="nl-icon">📝</span><span class="nl-text">Logs</span></a>
+    <a href="/settings"   class="nav-link {% if active=='settings'  %}active{% endif %}"><span class="nl-icon">⚙️</span><span class="nl-text">Settings</span></a>
+    <a href="/admin"      class="nav-link {% if active=='admin'     %}active{% endif %}"><span class="nl-icon">🛡️</span><span class="nl-text">Admin</span></a>
+  </div>
+  <div class="nav-right">
+    <span id="clock">--:--:--</span>
+    <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+    <a href="/logout" class="nbtn logout">⏻</a>
+  </div>
+</nav>
+
+<!-- Page -->
+<div style="position:relative;z-index:1;max-width:1700px;margin:0 auto;padding:20px 20px 50px">
+
+  <!-- Alert banner -->
+  <div id="alert-banner" class="full" style="margin-bottom:16px">
+    <span class="alert-icon">🚨</span>
+    <div><strong>OVERCROWDING ALERT</strong><div id="alert-msg" style="font-size:.82rem;margin-top:2px"></div></div>
+    <button onclick="hideAlertPopup()" style="margin-left:auto;background:none;border:none;color:var(--danger);cursor:pointer;font-size:1.1rem">✕</button>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT COLUMN -->
+    <div>
+      <!-- Stats row -->
+      <div class="stats-row" style="margin-bottom:18px">
+        <div class="card stat c0">
+          <div class="stat-label">Total Students</div>
+          <div class="stat-val" id="s-total">—</div>
+          <div class="stat-sub"><span class="dot-on"></span> ALL CAMERAS</div>
+        </div>
+        <div class="card stat c1">
+          <div class="stat-label">Camera 1</div>
+          <div class="stat-val" id="s0">—</div>
+          <div class="stat-sub" id="st0"><span class="dot-off"></span> CHECKING</div>
+        </div>
+        <div class="card stat c2">
+          <div class="stat-label">Camera 2</div>
+          <div class="stat-val" id="s1">—</div>
+          <div class="stat-sub" id="st1"><span class="dot-off"></span> CHECKING</div>
+        </div>
+        <div class="card stat c3">
+          <div class="stat-label">Camera 3</div>
+          <div class="stat-val" id="s2">—</div>
+          <div class="stat-sub" id="st2"><span class="dot-off"></span> CHECKING</div>
+        </div>
+        <div class="card stat c4">
+          <div class="stat-label">Camera 4</div>
+          <div class="stat-val" id="s3">—</div>
+          <div class="stat-sub" id="st3"><span class="dot-off"></span> CHECKING</div>
+        </div>
+      </div>
+
+      <!-- Camera controls bar -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-family:var(--fh);font-size:.68rem;letter-spacing:2px;color:var(--accent)">CAMERA CONTROLS</span>
+        <button class="btn btn-sm btn-ghost" onclick="handleCamToggle(this)">⏸ DISABLE</button>
+        <button class="btn btn-sm btn-ghost" onclick="reconnectCamera()">🔄 RECONNECT</button>
+        <button class="btn btn-sm btn-warn" id="btn-record" onclick="handleRecord(this)">🔴 RECORD</button>
+        <span style="margin-left:auto;font-size:.7rem;color:var(--muted)">Behavior: <span id="behavior-label" style="color:var(--green)">—</span></span>
+      </div>
+
+      <!-- 4-Camera grid -->
+      <div class="cam-grid">
+        <!-- CAM 1 -->
+        <div class="cam-tile">
+          <div class="cam-head">
+            <span class="cam-label-text">📷 CAMERA 1</span>
+            <span class="badge badge-info" id="b0">LOADING</span>
+          </div>
+          <div class="cam-video-wrap" id="vwrap0">
+            <div class="cam-loading" id="loader0"><div class="spinner"></div>Connecting…</div>
+            <img class="cam-video" src="/video" alt="Cam 1" id="vid0" onload="hideLoader(0)" onerror="onCamError(0)" style="opacity:0;transition:opacity .5s">
+            <div class="behavior-badge beh-low" id="beh0">—</div>
+            <div class="cam-watermark">CAM-01</div>
+          </div>
+          <div class="cam-foot">
+            <div class="cam-count-info">Students: <span class="cam-count-num" id="fc0">—</span></div>
+            <div class="cam-toolbar">
+              <button class="btn-icon" title="Capture" onclick="doCapture(this)">📸</button>
+              <button class="btn-icon" title="Fullscreen" onclick="goFullscreen('vid0')">⛶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CAM 2 -->
+        <div class="cam-tile">
+          <div class="cam-head">
+            <span class="cam-label-text">📷 CAMERA 2</span>
+            <span class="badge badge-info" id="b1">LOADING</span>
+          </div>
+          <div class="cam-video-wrap" id="vwrap1">
+            <div class="cam-loading" id="loader1"><div class="spinner"></div>Connecting…</div>
+            <img class="cam-video" src="/video" alt="Cam 2" id="vid1" onload="hideLoader(1)" onerror="onCamError(1)" style="opacity:0;transition:opacity .5s">
+            <div class="behavior-badge beh-low" id="beh1">—</div>
+            <div class="cam-watermark">CAM-02</div>
+          </div>
+          <div class="cam-foot">
+            <div class="cam-count-info">Students: <span class="cam-count-num" id="fc1">—</span></div>
+            <div class="cam-toolbar">
+              <button class="btn-icon" title="Capture" onclick="doCapture(this)">📸</button>
+              <button class="btn-icon" title="Fullscreen" onclick="goFullscreen('vid1')">⛶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CAM 3 -->
+        <div class="cam-tile">
+          <div class="cam-head">
+            <span class="cam-label-text">📷 CAMERA 3</span>
+            <span class="badge badge-info" id="b2">LOADING</span>
+          </div>
+          <div class="cam-video-wrap" id="vwrap2">
+            <div class="cam-loading" id="loader2"><div class="spinner"></div>Connecting…</div>
+            <img class="cam-video" src="/video" alt="Cam 3" id="vid2" onload="hideLoader(2)" onerror="onCamError(2)" style="opacity:0;transition:opacity .5s">
+            <div class="behavior-badge beh-low" id="beh2">—</div>
+            <div class="cam-watermark">CAM-03</div>
+          </div>
+          <div class="cam-foot">
+            <div class="cam-count-info">Students: <span class="cam-count-num" id="fc2">—</span></div>
+            <div class="cam-toolbar">
+              <button class="btn-icon" title="Capture" onclick="doCapture(this)">📸</button>
+              <button class="btn-icon" title="Fullscreen" onclick="goFullscreen('vid2')">⛶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CAM 4 -->
+        <div class="cam-tile">
+          <div class="cam-head">
+            <span class="cam-label-text">📷 CAMERA 4</span>
+            <span class="badge badge-info" id="b3">LOADING</span>
+          </div>
+          <div class="cam-video-wrap" id="vwrap3">
+            <div class="cam-loading" id="loader3"><div class="spinner"></div>Connecting…</div>
+            <img class="cam-video" src="/video" alt="Cam 4" id="vid3" onload="hideLoader(3)" onerror="onCamError(3)" style="opacity:0;transition:opacity .5s">
+            <div class="behavior-badge beh-low" id="beh3">—</div>
+            <div class="cam-watermark">CAM-04</div>
+          </div>
+          <div class="cam-foot">
+            <div class="cam-count-info">Students: <span class="cam-count-num" id="fc3">—</span></div>
+            <div class="cam-toolbar">
+              <button class="btn-icon" title="Capture" onclick="doCapture(this)">📸</button>
+              <button class="btn-icon" title="Fullscreen" onclick="goFullscreen('vid3')">⛶</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /cam-grid -->
+    </div><!-- /left -->
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- Activity log -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Activity Log</span><span class="ps">AUTO</span></div>
+        <div style="padding:10px 14px">
+          <ul id="log-list"><li><span class="log-empty">Waiting…</span></li></ul>
+        </div>
+      </div>
+
+      <!-- Session stats -->
+      <div class="panel">
+        <div class="ph"><span class="pt">Session Stats</span></div>
+        <div class="pb">
+          <div class="rpt-grid">
+            <div class="rpt-mini"><div class="rpt-mini-lbl">Peak</div><div class="rpt-mini-val" id="rpt-peak">—</div></div>
+            <div class="rpt-mini"><div class="rpt-mini-lbl">Avg</div><div class="rpt-mini-val" id="rpt-avg">—</div></div>
+          </div>
+          <a href="/analytics" class="btn btn-ghost btn-full btn-sm">📊 ANALYTICS</a>
+          <a href="/reports" class="btn btn-ghost btn-full btn-sm" style="margin-top:0">📋 REPORTS</a>
+          <a href="/api/report" class="btn btn-ghost btn-full btn-sm" style="margin-top:0" target="_blank">⬇ JSON</a>
+        </div>
+      </div>
+
+      <!-- System info -->
+      <div class="panel">
+        <div class="ph"><span class="pt">System Status</span></div>
+        <div style="padding:10px 16px">
+          <ul class="sys-list">
+            <li><span class="sys-k">AI Model</span><span class="sys-v">YOLOv8n</span></li>
+            <li><span class="sys-k">Camera</span><span class="sys-v" id="si-cam">Webcam #0</span></li>
+            <li><span class="sys-k">Panels</span><span class="sys-v">4 shared</span></li>
+            <li><span class="sys-k">Auto Save</span><span class="sys-v">30 min</span></li>
+            <li><span class="sys-k">DB</span><span class="sys-v" style="color:var(--green)">SQLite ✓</span></li>
+            <li><span class="sys-k">Status</span><span class="sys-v" id="si-status" style="color:var(--green)">ONLINE</span></li>
+            <li><span class="sys-k">Recording</span><span class="sys-v" id="si-rec" style="color:var(--muted)">OFF</span></li>
+          </ul>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /main -->
+</div>
+
+<div id="toast"></div>
+
+<script src="/static/js/common.js"></script>
+<script>
+'use strict';
+let peak=0, samples=[], ssum=0;
+let _recOn=false;
+
+function hideLoader(i) {
+  const l=document.getElementById(`loader${i}`);
+  const v=document.getElementById(`vid${i}`);
+  if(l){l.style.display='none';}
+  if(v){v.style.opacity='1';}
+}
+function onCamError(i) {
+  const l=document.getElementById(`loader${i}`);
+  if(l){l.innerHTML='<span style="color:var(--danger)">Camera offline</span>';}
+  document.getElementById(`b${i}`).className='badge badge-offline';
+  document.getElementById(`b${i}`).textContent='OFFLINE';
+}
+
+function behaviorClass(b) {
+  const m={'Empty':'beh-empty','Low':'beh-low','Moderate':'beh-moderate','High':'beh-high','Overcrowded':'beh-overcrowded'};
+  return m[b]||'beh-low';
+}
+
+function updateCams(online, enabled, count, behavior) {
+  for(let i=0;i<4;i++){
+    const b=document.getElementById(`b${i}`);
+    const st=document.getElementById(`st${i}`);
+    const fc=document.getElementById(`fc${i}`);
+    const beh=document.getElementById(`beh${i}`);
+
+    if(!enabled){
+      b.className='badge badge-warn';b.textContent='DISABLED';
+      if(st) st.innerHTML='<span class="dot-off"></span> DISABLED';
+    } else if(online){
+      b.className='badge badge-online';b.textContent='ONLINE';
+      if(st) st.innerHTML='<span class="dot-on"></span> ONLINE';
+    } else {
+      b.className='badge badge-offline';b.textContent='OFFLINE';
+      if(st) st.innerHTML='<span class="dot-off"></span> OFFLINE';
+    }
+    if(fc) fc.textContent=count;
+    if(beh){ beh.className=`behavior-badge ${behaviorClass(behavior)}`; beh.textContent=behavior||'—'; }
+
+    document.getElementById(`s${i}`).textContent=count;
+  }
+  const siCam=document.getElementById('si-cam');
+  const siSt=document.getElementById('si-status');
+  if(siCam) siCam.textContent=online?'Webcam #0':'Offline';
+  if(siSt){siSt.textContent=online?'ONLINE':'OFFLINE';siSt.style.color=online?'var(--green)':'var(--danger)';}
+  const behLbl=document.getElementById('behavior-label');
+  if(behLbl){behLbl.textContent=behavior||'—';behLbl.style.color=behavior==='Overcrowded'?'var(--danger)':behavior==='High'?'var(--orange)':'var(--green)';}
+  const siRec=document.getElementById('si-rec');
+  if(siRec){siRec.textContent=_recOn?'● ON':'OFF';siRec.style.color=_recOn?'var(--danger)':'var(--muted)';}
+}
+
+function renderLogs(logs) {
+  const ul=document.getElementById('log-list');
+  if(!logs||!logs.length){ul.innerHTML='<li><span class="log-empty">No records yet.</span></li>';return;}
+  ul.innerHTML=logs.map(l=>`<li><span class="log-num">${l.count}</span><span class="log-lbl">students</span><span class="log-t">${l.time}</span></li>`).join('');
+}
+
+function trackPeakAvg(n) {
+  if(n>peak) peak=n;
+  samples.push(n);ssum+=n;
+  if(samples.length>60){ssum-=samples.shift();}
+  document.getElementById('rpt-peak').textContent=peak;
+  document.getElementById('rpt-avg').textContent=(ssum/samples.length).toFixed(1);
+}
+
+let _autoRefresh=true;
+async function refresh() {
+  if(!_autoRefresh) return;
+  try {
+    const r=await fetch('/api/stats');
+    if(r.redirected){location.href=r.url;return;}
+    const d=await r.json();
+    _autoRefresh=d.auto_refresh!==false;
+    document.getElementById('s-total').textContent=d.count??'—';
+    updateCams(d.online,d.enabled!==false,d.count??0,d.behavior||'—');
+    trackPeakAvg(d.count??0);
+    handleAlert(d.alert);
+    renderLogs(d.logs);
+  } catch(e){console.warn(e);}
+}
+
+async function handleCamToggle(btn) {
+  const en=await toggleCamera();
+  if(btn) btn.textContent=en?'⏸ DISABLE':'▶ ENABLE';
+}
+
+async function handleRecord(btn) {
+  _recOn=await toggleRecording();
+  if(btn) btn.textContent=_recOn?'⏹ STOP REC':'🔴 RECORD';
+}
+
+refresh();
+setInterval(refresh,2000);
+</script>
+</body>
+</html>

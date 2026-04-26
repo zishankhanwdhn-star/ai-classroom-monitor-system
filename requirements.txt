@@ -1,0 +1,14 @@
+# ══════════════════════════════════════════════
+#  AI Classroom Monitor v3 — Requirements
+#  Python 3.11 compatible
+#  Install: pip install -r requirements.txt
+# ══════════════════════════════════════════════
+
+flask==3.0.3
+ultralytics==8.2.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+
+# NOTE: smtplib is Python built-in — no install needed
+# NOTE: sqlite3  is Python built-in — no install needed
+# NOTE: csv, io, threading — all built-in, no install needed
